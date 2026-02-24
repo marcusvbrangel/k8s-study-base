@@ -213,7 +213,8 @@ spec:
             while true; do
               echo "wolfstore catalog is running..."
               sleep 5
-            done
+            done &
+            nginx -g "daemon off;"
         ports:
         - containerPort: 80
 
@@ -294,100 +295,8 @@ spec:
     ports:
     - containerPort: 80
       protocol: TCP
-    resources: {}
-    terminationMessagePath: /dev/termination-log
-    terminationMessagePolicy: File
-    volumeMounts:
-    - mountPath: /var/run/secrets/kubernetes.io/serviceaccount
-      name: kube-api-access-w88zl
-      readOnly: true
-  dnsPolicy: ClusterFirst
-  enableServiceLinks: true
-  nodeName: worker-01
-  preemptionPolicy: PreemptLowerPriority
-  priority: 0
-  restartPolicy: Always
-  schedulerName: default-scheduler
-  securityContext: {}
-  serviceAccount: default
-  serviceAccountName: default
-  terminationGracePeriodSeconds: 30
-  tolerations:
-  - effect: NoExecute
-    key: node.kubernetes.io/not-ready
-    operator: Exists
-    tolerationSeconds: 300
-  - effect: NoExecute
-    key: node.kubernetes.io/unreachable
-    operator: Exists
-    tolerationSeconds: 300
-  volumes:
-  - name: kube-api-access-w88zl
-    projected:
-      defaultMode: 420
-      sources:
-      - serviceAccountToken:
-          expirationSeconds: 3607
-          path: token
-      - configMap:
-          items:
-          - key: ca.crt
-            path: ca.crt
-          name: kube-root-ca.crt
-      - downwardAPI:
-          items:
-          - fieldRef:
-              apiVersion: v1
-              fieldPath: metadata.namespace
-            path: namespace
-status:
-  conditions:
-  - lastProbeTime: null
-    lastTransitionTime: "2026-02-24T18:27:00Z"
-    status: "True"
-    type: PodReadyToStartContainers
-  - lastProbeTime: null
-    lastTransitionTime: "2026-02-24T18:26:59Z"
-    status: "True"
-    type: Initialized
-  - lastProbeTime: null
-    lastTransitionTime: "2026-02-24T18:27:00Z"
-    status: "True"
-    type: Ready
-  - lastProbeTime: null
-    lastTransitionTime: "2026-02-24T18:27:00Z"
-    status: "True"
-    type: ContainersReady
-  - lastProbeTime: null
-    lastTransitionTime: "2026-02-24T18:26:59Z"
-    status: "True"
-    type: PodScheduled
-  containerStatuses:
-  - containerID: containerd://153cd60fd853cb3dfec9d7013d24602881e1e2bbb6089152620c893c6bc65c95
-    image: docker.io/library/nginx:1.28.2-alpine
-    imageID: docker.io/library/nginx@sha256:15e96e59aa3b0aada3a121296e3bce117721f42d88f5f64217ef4b18f458c6ab
-    lastState: {}
-    name: wolfshop-catalog-container
-    ready: true
-    restartCount: 0
-    started: true
-    state:
-      running:
-        startedAt: "2026-02-24T18:27:00Z"
-    volumeMounts:
-    - mountPath: /var/run/secrets/kubernetes.io/serviceaccount
-      name: kube-api-access-w88zl
-      readOnly: true
-      recursiveReadOnly: Disabled
-  hostIP: 192.168.122.169
-  hostIPs:
-  - ip: 192.168.122.169
-  phase: Running
-  podIP: 10.0.1.16
-  podIPs:
-  - ip: 10.0.1.16
-  qosClass: BestEffort
-  startTime: "2026-02-24T18:26:59Z"
+      
+      ...
 
 """
 
@@ -790,18 +699,6 @@ não tem permissão de escrita na pasta do seu laptop. No seu laptop, rode:
     sudo chmod 777 /srv/k8s-data
 
 
-	
-
-
-
-----------------------------------------------------------------------------------------------------------
-	??? probes / resources / limits / afinity / segurança user/resources no pod / ???
-----------------------------------------------------------------------------------------------------------
-
-
-
-
-
 
 
 ------------------------------------------------------------------------------
@@ -809,10 +706,124 @@ não tem permissão de escrita na pasta do seu laptop. No seu laptop, rode:
 ------------------------------------------------------------------------------
 
 
+kubectl expose deployment wolfshop-catalog \
+--type=ClusterIP --port=80 --target-port=80 \
+--namespace=wolfshop \
+--dry-run=client -o yaml > wolfshop-catalog-service.yaml
+
+
+cat wolfshop-catalog-service.yaml
+
+"""
+
+apiVersion: v1
+kind: Service
+metadata:
+  labels:
+    app: wolfshop-catalog
+  name: wolfshop-catalog
+  namespace: wolfshop
+spec:
+  ports:
+  - port: 80
+    protocol: TCP
+    targetPort: 80
+  selector:
+    app: wolfshop-catalog
+  type: ClusterIP
+status:
+  loadBalancer: {}
+
+"""
+
+
+kubectl apply -f wolfshop-catalog-service.yaml
+
+   service/wolfshop-catalog created
+
+
+
+kubectl get service -o wide
+
+    NAME               TYPE        CLUSTER-IP       EXTERNAL-IP   PORT(S)   AGE   SELECTOR
+    wolfshop-catalog   ClusterIP   10.105.250.120   <none>        80/TCP    50s   app=wolfshop-catalog
+
+
+
+kubectl get ep -o wide
+
+    NAME               ENDPOINTS       AGE
+    wolfshop-catalog   10.0.1.192:80   7m44s
+
+
+
+
+TESTE RAPIDO:
+---------------
+
+O Jeito "Rápido" (Port-Forward)
+Somente ver se o app está respondendo agora, sem configurar rotas.
+
+kubectl port-forward svc/wolfshop-catalog 8081:80
+
+    Forwarding from 127.0.0.1:8081 -> 80
+    Forwarding from [::1]:8081 -> 80
+
+
+curl localhost:8081
+
+    curl: (52) Empty reply from server
+
+
+
+
+
 
 ------------------------------------------------------------------------------
 	criar routes com ngf 
 ------------------------------------------------------------------------------
+
+
+OFFICIAL DOCS
+------------------------
+
+https://docs.nginx.com/nginx-gateway-fabric/traffic-management/
+https://docs.nginx.com/nginx-gateway-fabric/traffic-management/basic-routing/
+https://docs.nginx.com/nginx-gateway-fabric/traffic-security/
+https://docs.nginx.com/nginx-gateway-fabric//monitoring/
+
+https://github.com/nginx/nginx-gateway-fabric/tree/main/examples
+https://github.com/nginx/nginx-gateway-fabric/tree/main/examples/cafe-example
+
+
+
+	
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+----------------------------------------------------------------------------------------------------------
+	??? probes / resources / limits / afinity / segurança user/resources no pod / ???
+----------------------------------------------------------------------------------------------------------
+
 
 
 
