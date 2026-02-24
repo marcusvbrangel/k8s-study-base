@@ -1,0 +1,17 @@
+apiVersion: v1
+kind: Service
+metadata:
+  labels:
+    app: wolfshop-catalog
+  name: wolfshop-catalog
+  namespace: wolfshop
+spec:
+  ports:
+  - port: 80
+    protocol: TCP
+    targetPort: 80
+  selector:
+    app: wolfshop-catalog
+  type: ClusterIP
+status:
+  loadBalancer: {}

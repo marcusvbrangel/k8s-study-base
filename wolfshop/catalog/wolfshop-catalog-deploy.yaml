@@ -28,10 +28,12 @@ spec:
         command: ["sh", "-c"]
         args: 
         - |
+            echo "<h1>Wolfshop - Catalog</h1><hr>" > "/usr/share/nginx/html/index.html"
             while true; do
-              echo "$(date +"%Y-%m-%d %H:%M:%S") wolfstore catalog is running..."
+              echo "$(date +"%Y-%m-%d %H:%M:%S") wolfshop catalog is running..."
               sleep 10
-            done
+            done &
+            nginx -g "daemon off;"
         volumeMounts:
         - name: catalog-volume
           mountPath: /data
