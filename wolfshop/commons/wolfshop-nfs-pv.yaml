@@ -1,0 +1,14 @@
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: wolfshop-nfs-pv
+  namespace: wolfshop
+spec:
+  storageClassName: nfs-static
+  capacity:
+    storage: 20Gi
+  accessModes:
+    - ReadWriteMany
+  nfs:
+    server: 192.168.122.1
+    path: /srv/k8s-data

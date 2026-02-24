@@ -1,0 +1,43 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  labels:
+    app: wolfshop-catalog
+  name: wolfshop-catalog
+  namespace: wolfshop
+#--------------- deploy -------------------------------------------  
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: wolfshop-catalog
+#---------------- pod ---------------------------------------------      
+  template:
+    metadata:
+      labels:
+        app: wolfshop-catalog
+    spec:
+      containers:
+      - image: nginx:1.28.2-alpine
+        name: wolfshop-catalog-container
+        envFrom:
+        - configMapRef:
+            name: wolfshop-catalog-configmap
+        - secretRef:
+            name: wolfshop-catalog-secret
+        command: ["sh", "-c"]
+        args: 
+        - |
+            while true; do
+              echo "$(date +"%Y-%m-%d %H:%M:%S") wolfstore catalog is running..."
+              sleep 10
+            done
+        volumeMounts:
+        - name: catalog-volume
+          mountPath: /data
+        ports:
+        - containerPort: 80
+      volumes:
+      - name: catalog-volume
+        persistentVolumeClaim:
+          claimName: wolfshop-nfs-pvc

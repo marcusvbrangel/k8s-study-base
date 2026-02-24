@@ -1,0 +1,8 @@
+apiVersion: v1
+data:
+  DB_URL: postgres/catalog
+  DB_USER: root
+kind: ConfigMap
+metadata:
+  name: wolfshop-catalog-configmap
+  namespace: wolfshop
