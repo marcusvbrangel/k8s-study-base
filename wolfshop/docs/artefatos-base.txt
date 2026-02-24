@@ -1,0 +1,834 @@
+
+------------------------------------------------------------------------------
+	criar namespace
+------------------------------------------------------------------------------
+
+kubectl create namespace -h
+
+kubectl create namespace wolfshop --dry-run=client -o yaml > wolfshop-namespace.yaml
+
+kubectl apply -f wolfshop-namespace.yaml
+
+cat wolfshop-namespace.yaml 
+
+"""
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: wolfshop
+spec: {}
+status: {}
+"""
+
+kubectl get namespaces
+
+  NAME                STATUS   AGE
+  wolfshop            Active   54s
+
+
+kubens wolfshop
+
+  ✔ Active namespace is "wolfshop"
+
+
+
+------------------------------------------------------------------------------
+	criar deployment
+------------------------------------------------------------------------------
+
+kubectl create deployment -h
+
+
+kubectl create deployment wolfshop-catalog --image=nginx:1.28.2-alpine --port=80 -n wolfshop --dry-run=client -o yaml > wolfshop-catalog-deploy.yaml
+
+"""
+
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  labels:
+    app: wolfshop-catalog
+  name: wolfshop-catalog
+  namespace: wolfshop
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: wolfshop-catalog
+  strategy: {}
+  template:
+    metadata:
+      labels:
+        app: wolfshop-catalog
+    spec:
+      containers:
+      - image: nginx:1.28.2-alpine
+        name: wolfshop-catalog-container
+        ports:
+        - containerPort: 80
+        resources: {}
+status: {}
+
+"""
+
+
+kubectl apply -f wolfshop-catalog-deploy.yaml 
+
+  deployment.apps/wolfshop-catalog configured
+
+
+kubectl get deploy -o wide
+
+  NAME               READY   UP-TO-DATE   AVAILABLE   AGE     CONTAINERS                   IMAGES                SELECTOR
+  wolfshop-catalog   1/1     1            1           5m21s   wolfshop-catalog-container   nginx:1.28.2-alpine   app=wolfshop-catalog
+
+
+
+
+Para acessar o Nginx:
+
+1. O jeito "estou testando agora" (Port-Forward)
+Se você apenas quer ver se o Nginx está funcionando, use o kubectl port-forward. Isso cria um túnel direto da sua máquina para o Pod:
+
+kubectl port-forward deployment/wolfshop-catalog 8080:80
+
+  Forwarding from 127.0.0.1:8080 -> 80
+  Forwarding from [::1]:8080 -> 80
+
+curl localhost:8080
+
+
+
+2. O jeito "padrão Kubernetes" (Expose)
+Para que outros Pods no cluster ou o mundo externo acessem, você deve "expor" o deployment criando um Service:
+
+kubectl expose deployment base-deploy --port=80 --target-port=80 --type=NodePort
+
+
+
+tasks:
+
+  - limpar o que nao precisa
+ 
+  
+
+----- definir variaveis de ambientes ------------
+
+vim wolfshop-catalog-deploy.yaml
+
+"""
+
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  labels:
+    app: wolfshop-catalog
+  name: wolfshop-catalog
+  namespace: wolfshop
+#--------------- deploy -------------------------------------------  
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: wolfshop-catalog
+#---------------- pod ---------------------------------------------      
+  template:
+    metadata:
+      labels:
+        app: wolfshop-catalog
+    spec:
+      containers:
+      - image: nginx:1.28.2-alpine
+        name: wolfshop-catalog-container
+        env:
+        - name: user
+          value: "admin"
+        - name: pwd
+          value: "dfs234dfsd"
+        ports:
+        - containerPort: 80
+        
+"""
+
+kubectl apply -f wolfshop-catalog-deploy.yaml 
+
+  deployment.apps/wolfshop-catalog configured
+
+
+kubectl get deploy -o wide
+
+  NAME               READY   UP-TO-DATE   AVAILABLE   AGE   CONTAINERS                   IMAGES                SELECTOR
+  wolfshop-catalog   1/1     1            1           21m   wolfshop-catalog-container   nginx:1.28.2-alpine   app=wolfshop-catalog
+
+
+kubectl get pods -o wide
+
+  NAME                                READY   STATUS    RESTARTS   AGE   IP           NODE        NOMINATED NODE   READINESS GATES
+  wolfshop-catalog-784748cb76-h4zwz   1/1     Running   0          3m    10.0.1.146   worker-01   <none>           <none>
+
+
+kubectl exec -it wolfshop-catalog-784748cb76-h4zwz -- env
+
+  user=admin
+  pwd=dfs234dfsd
+
+
+
+----- definir command ------------
+
+vim wolfshop-catalog-deploy.yaml
+
+"""
+
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  labels:
+    app: wolfshop-catalog
+  name: wolfshop-catalog
+  namespace: wolfshop
+#--------------- deploy -------------------------------------------  
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: wolfshop-catalog
+#---------------- pod ---------------------------------------------      
+  template:
+    metadata:
+      labels:
+        app: wolfshop-catalog
+    spec:
+      containers:
+      - image: nginx:1.28.2-alpine
+        name: wolfshop-catalog-container
+        env:
+        - name: user
+          value: "admin"
+        - name: pwd
+          value: "dfs234dfsd"
+        command: ["sh", "-c"]
+        args: 
+        - |
+            while true; do
+              echo "wolfstore catalog is running..."
+              sleep 5
+            done
+        ports:
+        - containerPort: 80
+
+"""
+
+kubectl apply -f wolfshop-catalog-deploy.yaml
+
+kubectl get deploy -o wide
+
+kubectl get pods -o wide
+
+watch -d kubectl logs wolfshop-catalog-8c5655754-km56j
+
+  2026-02-24 18:27:20 wolfstore catalog is running...
+  2026-02-24 18:27:30 wolfstore catalog is running...
+  2026-02-24 18:27:40 wolfstore catalog is running...
+
+
+
+----- definir configmap ------------
+
+
+
+
+----- definir secret ------------
+
+
+
+
+
+
+----- dica: pegar a cofiguração completa armazenada no etcd ------------
+
+
+kubectl get pod wolfshop-catalog-8c5655754-km56j -o yaml
+
+
+"""
+
+apiVersion: v1
+kind: Pod
+metadata:
+  creationTimestamp: "2026-02-24T18:26:59Z"
+  generateName: wolfshop-catalog-8c5655754-
+  labels:
+    app: wolfshop-catalog
+    pod-template-hash: 8c5655754
+  name: wolfshop-catalog-8c5655754-km56j
+  namespace: wolfshop
+  ownerReferences:
+  - apiVersion: apps/v1
+    blockOwnerDeletion: true
+    controller: true
+    kind: ReplicaSet
+    name: wolfshop-catalog-8c5655754
+    uid: 00f6b5a4-65e1-4f41-b893-b6cda6a5c1c6
+  resourceVersion: "1086329"
+  uid: 071ac5aa-d8d7-438b-a081-c251929417fd
+spec:
+  containers:
+  - args:
+    - |
+      while true; do
+        echo "$(date +"%Y-%m-%d %H:%M:%S") wolfstore catalog is running..."
+        sleep 10
+      done
+    command:
+    - sh
+    - -c
+    env:
+    - name: user
+      value: admin
+    - name: pwd
+      value: dfs234dfsd
+    image: nginx:1.28.2-alpine
+    imagePullPolicy: IfNotPresent
+    name: wolfshop-catalog-container
+    ports:
+    - containerPort: 80
+      protocol: TCP
+    resources: {}
+    terminationMessagePath: /dev/termination-log
+    terminationMessagePolicy: File
+    volumeMounts:
+    - mountPath: /var/run/secrets/kubernetes.io/serviceaccount
+      name: kube-api-access-w88zl
+      readOnly: true
+  dnsPolicy: ClusterFirst
+  enableServiceLinks: true
+  nodeName: worker-01
+  preemptionPolicy: PreemptLowerPriority
+  priority: 0
+  restartPolicy: Always
+  schedulerName: default-scheduler
+  securityContext: {}
+  serviceAccount: default
+  serviceAccountName: default
+  terminationGracePeriodSeconds: 30
+  tolerations:
+  - effect: NoExecute
+    key: node.kubernetes.io/not-ready
+    operator: Exists
+    tolerationSeconds: 300
+  - effect: NoExecute
+    key: node.kubernetes.io/unreachable
+    operator: Exists
+    tolerationSeconds: 300
+  volumes:
+  - name: kube-api-access-w88zl
+    projected:
+      defaultMode: 420
+      sources:
+      - serviceAccountToken:
+          expirationSeconds: 3607
+          path: token
+      - configMap:
+          items:
+          - key: ca.crt
+            path: ca.crt
+          name: kube-root-ca.crt
+      - downwardAPI:
+          items:
+          - fieldRef:
+              apiVersion: v1
+              fieldPath: metadata.namespace
+            path: namespace
+status:
+  conditions:
+  - lastProbeTime: null
+    lastTransitionTime: "2026-02-24T18:27:00Z"
+    status: "True"
+    type: PodReadyToStartContainers
+  - lastProbeTime: null
+    lastTransitionTime: "2026-02-24T18:26:59Z"
+    status: "True"
+    type: Initialized
+  - lastProbeTime: null
+    lastTransitionTime: "2026-02-24T18:27:00Z"
+    status: "True"
+    type: Ready
+  - lastProbeTime: null
+    lastTransitionTime: "2026-02-24T18:27:00Z"
+    status: "True"
+    type: ContainersReady
+  - lastProbeTime: null
+    lastTransitionTime: "2026-02-24T18:26:59Z"
+    status: "True"
+    type: PodScheduled
+  containerStatuses:
+  - containerID: containerd://153cd60fd853cb3dfec9d7013d24602881e1e2bbb6089152620c893c6bc65c95
+    image: docker.io/library/nginx:1.28.2-alpine
+    imageID: docker.io/library/nginx@sha256:15e96e59aa3b0aada3a121296e3bce117721f42d88f5f64217ef4b18f458c6ab
+    lastState: {}
+    name: wolfshop-catalog-container
+    ready: true
+    restartCount: 0
+    started: true
+    state:
+      running:
+        startedAt: "2026-02-24T18:27:00Z"
+    volumeMounts:
+    - mountPath: /var/run/secrets/kubernetes.io/serviceaccount
+      name: kube-api-access-w88zl
+      readOnly: true
+      recursiveReadOnly: Disabled
+  hostIP: 192.168.122.169
+  hostIPs:
+  - ip: 192.168.122.169
+  phase: Running
+  podIP: 10.0.1.16
+  podIPs:
+  - ip: 10.0.1.16
+  qosClass: BestEffort
+  startTime: "2026-02-24T18:26:59Z"
+
+"""
+
+
+
+------------------------------------------------------------------------------
+	criar configmap
+------------------------------------------------------------------------------
+
+kubectl create configmap wolfshop-catalog-configmap \
+  --from-literal=DB_USER=root \
+  --from-literal=DB_URL="postgres/catalog" \
+  --namespace wolfshop \
+  --dry-run=client -o yaml > wolfshop-catalog-configmap.yaml
+
+
+cat wolfshop-catalog-configmap.yaml 
+
+"""
+
+apiVersion: v1
+data:
+  DB_URL: postgres/catalog
+  DB_USER: root
+kind: ConfigMap
+metadata:
+  name: wolfshop-catalog-configmap
+  namespace: wolfshop
+
+"""
+
+kubectl get configmap -n wolfshop -o wide
+
+  NAME               DATA   AGE
+  wolfshop-catalog   2      110s
+
+
+
+
+------------------------------------------------------------------------------
+	criar secret
+------------------------------------------------------------------------------
+
+
+kubectl create secret generic wolfshop-catalog-secret \
+--from-literal=DB_PASSWORD=sd9dsfk \
+--namespace wolfshop \
+--dry-run=client -o yaml > wolfshop-catalog-secret.yaml
+
+
+kubectl apply -f wolfshop-catalog-secret.yaml
+
+
+kubectl get secret -o wide
+
+  NAME               TYPE     DATA   AGE
+  wolfshop-catalog   Opaque   1      24s
+
+
+cat wolfshop-catalog-secret.yaml 
+
+"""
+
+apiVersion: v1
+data:
+  DB_PASSWORD: c2Q5ZHNmaw==
+kind: Secret
+metadata:
+  wolfshop-catalog-secret
+  namespace: wolfshop
+  
+"""
+
+
+
+------------------------------------------------------------------------------
+	associar configmap e secret no deployment
+------------------------------------------------------------------------------
+
+
+cat wolfshop-catalog-deploy.yaml
+
+"""
+
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  labels:
+    app: wolfshop-catalog
+  name: wolfshop-catalog
+  namespace: wolfshop
+#--------------- deploy -------------------------------------------  
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: wolfshop-catalog
+#---------------- pod ---------------------------------------------      
+  template:
+    metadata:
+      labels:
+        app: wolfshop-catalog
+    spec:
+      containers:
+      - image: nginx:1.28.2-alpine
+        name: wolfshop-catalog-container
+        envFrom:
+        - configMapRef:
+            name: wolf-catalog-configmap
+        - secretRef:
+            name: wolf-catalog-secret
+        command: ["sh", "-c"]
+        args: 
+        - |
+            while true; do
+              echo "$(date +"%Y-%m-%d %H:%M:%S") wolfstore catalog is running..."
+              sleep 10
+            done
+        ports:
+        - containerPort: 80
+
+"""
+
+
+kubectl exec -it wolfshop-catalog-56c4b58b8-d5clm -- env
+
+  DB_URL=postgres/catalog
+  DB_USER=root
+  DB_PASSWORD=sd9dsfk
+
+
+kubectl describe pod wolfshop-catalog-56c4b58b8-d5clm
+
+  Environment Variables from:
+    wolfshop-catalog-configmap  ConfigMap  Optional: false
+    wolfshop-catalog-secret     Secret     Optional: false
+  Environment:                  <none>
+
+
+
+
+------------------------------------------------------------------------------
+	criar volume
+------------------------------------------------------------------------------
+
+
+--------- 01. storage class ------------
+
+
+cat storageclass-nfs.yaml 
+
+"""
+
+apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata:
+  name: nfs-static
+provisioner: kubernetes.io/no-provisioner
+reclaimPolicy: Retain
+volumeBindingMode: Immediate
+
+"""
+
+
+kubectl apply -f storageclass-nfs.yaml
+
+kubectl get storageclass -o wide
+
+  NAME         PROVISIONER                    RECLAIMPOLICY   VOLUMEBINDINGMODE   ALLOWVOLUMEEXPANSION   AGE
+  nfs-static   kubernetes.io/no-provisioner   Retain          Immediate           false                  24h
+
+
+
+
+--------- 02. persistence volume ------------
+
+
+cat wolfshop-nfs-pv.yaml 
+
+"""
+
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: wolfshop-nfs-pv
+  namespace: wolfshop
+spec:
+  storageClassName: nfs-static
+  capacity:
+    storage: 20Gi
+  accessModes:
+    - ReadWriteMany
+  nfs:
+    server: 192.168.122.1
+    path: /srv/k8s-data
+
+"""
+
+
+kubectl apply -f wolfshop-nfs-pv.yaml 
+
+   persistentvolume/wolfshop-nfs-pv created
+
+
+kubectl get pv -o wide
+
+  NAME              CAPACITY   ACCESS MODES   RECLAIM POLICY   STATUS      CLAIM             STORAGECLASS   VOLUMEATTRIBUTESCLASS   REASON   AGE   VOLUMEMODE
+  wolfshop-nfs-pv   20Gi       RWX            Retain           Available                     nfs-static     <unset>                          38s   Filesystem
+
+
+
+
+--------- 03. persistence volume clain ------------
+
+
+cat wolfshop-nfs-pvc.yaml 
+
+"""
+
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: wolfshop-nfs-pvc
+  namespace: wolfshop
+spec:
+  storageClassName: nfs-static
+  accessModes:
+    - ReadWriteMany
+  resources:
+    requests:
+      storage: 5Gi
+
+"""
+
+
+kubectl apply -f wolfshop-nfs-pvc.yaml 
+
+  persistentvolumeclaim/wolfshop-nfs-pvc created
+
+
+kubectl get pvc -o wide
+
+  NAME               STATUS   VOLUME            CAPACITY   ACCESS MODES   STORAGECLASS   VOLUMEATTRIBUTESCLASS   AGE   VOLUMEMODE
+  wolfshop-nfs-pvc   Bound    wolfshop-nfs-pv   20Gi       RWX            nfs-static     <unset>                 26s   Filesystem
+
+
+
+
+
+--------- 04. associar o persistent volume no deployment ------------
+
+
+cat wolfshop-catalog-deploy.yaml 
+
+"""
+
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  labels:
+    app: wolfshop-catalog
+  name: wolfshop-catalog
+  namespace: wolfshop
+#--------------- deploy -------------------------------------------  
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: wolfshop-catalog
+#---------------- pod ---------------------------------------------      
+  template:
+    metadata:
+      labels:
+        app: wolfshop-catalog
+    spec:
+      containers:
+      - image: nginx:1.28.2-alpine
+        name: wolfshop-catalog-container
+        envFrom:
+        - configMapRef:
+            name: wolfshop-catalog-configmap
+        - secretRef:
+            name: wolfshop-catalog-secret
+        command: ["sh", "-c"]
+        args: 
+        - |
+            while true; do
+              echo "$(date +"%Y-%m-%d %H:%M:%S") wolfstore catalog is running..."
+              sleep 10
+            done
+        volumeMounts:
+        - name: catalog-volume
+          mountPath: /data
+        ports:
+        - containerPort: 80
+      volumes:
+      - name: catalog-volume
+        persistentVolumeClaim:
+          claimName: wolfshop-nfs-pvc
+
+"""
+
+kubectl apply -f wolfshop-catalog-deploy.yaml
+
+kubectl get deploy
+
+
+
+
+--------- 05. verificar onde o volume foi montado fisicamente ------------
+
+
+Para saber onde o seu volume está montado fisicamente, precisamos olhar para as duas pontas: 
+o servidor NFS (origem) e o Node do Kubernetes (destino).
+
+
+1. No Servidor (A Origem Física / host)
+
+ls -la /srv/k8s-data
+
+  -rw-r--r-- 1 root   root    1516945 fev 23 23:59 log.txt
+  -rw-r--r-- 1 root   root         12 fev 23 16:17 teste-arquivo
+
+
+2. No Node do Kubernetes (Onde o Pod está rodando)
+
+O Kubernetes monta o NFS no Sistema de Arquivos do Worker Node antes de entregá-lo ao Pod. 
+Para ver essa montagem "real" no Linux do Node: Descubra em qual node o pod está.
+
+kubectl get pods -o wide
+
+  NAME                               READY   STATUS    RESTARTS   AGE   IP           NODE        NOMINATED NODE   READINESS GATES
+  wolfshop-catalog-68b7fb9f8-9lxsj   1/1     Running   0          11m   10.0.1.192   worker-01   <none>           <none>
+
+
+Acesse esse Node via SSH e procure pelo ponto de montagem do NFS:
+
+ssh wolf@worker-01
+
+findmnt | grep nfs
+
+  └─/var/lib/kubelet/pods/f03f7015-fd0a-4784-b324-d7cce5916acc/volumes/kubernetes.io~nfs/wolfshop-nfs-pv                           192.168.122.1:/srv/k8s-data       nfs4            			rw,relatime,vers=4.2,rsize=1048576,wsize=1048576,namlen=255,hard,proto=tcp,timeo=600,retrans=2,sec=sys,clientaddr=192.168.122.169,local_lock=none,addr=192.168.122.1
+
+
+
+3. Dentro do Container (A Visão do App)
+
+Para confirmar que o volume está montado corretamente dentro do container do Nginx:
+
+
+kubectl exec -it wolfshop-catalog-68b7fb9f8-9lxsj -n wolfshop -- df -h /data
+
+  Filesystem                		Size      	Used Available Use% 	Mounted on
+  192.168.122.1:/srv/k8s-data           438.0G    	227.4G    188.3G  55% 	/data
+
+
+
+DICA:
+-------
+
+Para testar a escrita e ver o arquivo aparecendo no seu host físico (seu laptop), 
+você deve executar o comando dentro do container e depois conferir na pasta que você definiu no PV.
+Siga estes 3 passos:
+
+1. Escrever o arquivo dentro do Pod
+Como o seu volumeMounts aponta para /data, você precisa escrever especificamente nesse diretório:
+
+
+kubectl exec -it wolfshop-catalog-68b7fb9f8-9lxsj -- sh
+
+  # echo "Conteudo do Volume NFS" > /data/teste-nfs.txt
+  
+  # ls -la /data/  
+      -rw-r--r--    1 root     root            23 Feb 24 20:42 teste-nfs.txt
+      
+  # cat /data/teste-nfs.txt 
+    Conteudo do Volume NFS
+
+
+
+2. Verificar onde ele aparece no seu Laptop (Host KVM)
+
+ls -la /srv/k8s-data
+
+   -rw-r--r-- 1 root   root         23 fev 24 17:42 teste-nfs.txt
+
+cat /srv/k8s-data/teste-nfs.txt
+
+    Conteudo do Volume NFS
+
+
+
+ATENÇÃO:
+-----------
+
+Atenção aos erros comuns:
+Se o comando do passo 1 der "Permission Denied", é porque o usuário dentro do container (nginx) 
+não tem permissão de escrita na pasta do seu laptop. No seu laptop, rode:
+
+    sudo chmod 777 /srv/k8s-data
+
+
+	
+
+
+
+----------------------------------------------------------------------------------------------------------
+	??? probes / resources / limits / afinity / segurança user/resources no pod / ???
+----------------------------------------------------------------------------------------------------------
+
+
+
+
+
+
+
+------------------------------------------------------------------------------
+	criar service
+------------------------------------------------------------------------------
+
+
+
+------------------------------------------------------------------------------
+	criar routes com ngf 
+------------------------------------------------------------------------------
+
+
+
+
+------------------------------------------------------------------------------
+	criar policies
+------------------------------------------------------------------------------
+
+
+
+
+
+
+
+
+
+
+
+
