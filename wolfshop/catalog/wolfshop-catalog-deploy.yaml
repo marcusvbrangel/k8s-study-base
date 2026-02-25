@@ -20,6 +20,13 @@ spec:
       containers:
       - image: nginx:1.28.2-alpine
         name: wolfshop-catalog-container
+        resources:
+          requests:
+            memory: "128Mi"
+            cpu: "0.1"
+          limits:
+            memory: "256Mi"
+            cpu: "0.2"
         envFrom:
         - configMapRef:
             name: wolfshop-catalog-configmap

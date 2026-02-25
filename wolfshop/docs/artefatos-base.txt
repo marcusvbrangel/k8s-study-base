@@ -780,6 +780,100 @@ curl localhost:8081
 
 
 
+------------------------------------------------------------------------------
+	resources - requests and limits
+------------------------------------------------------------------------------
+
+
+"""
+
+spec:
+      containers:
+      - image: nginx:1.28.2-alpine
+        name: wolfshop-catalog-container
+        resources:
+          requests:
+            memory: "128Mi"
+            cpu: "0.1"
+          limits:
+            memory: "256Mi"
+            cpu: "0.2"
+
+"""
+
+
+kubectl describe node worker-01
+
+  Non-terminated Pods:          (4 in total)
+  Namespace                   Name                                 CPU Requests  CPU Limits  Memory Requests  Memory Limits  Age
+  ---------                   ----                                 ------------  ----------  ---------------  -------------  ---
+  kube-system                 cilium-envoy-crmzz                   0 (0%)        0 (0%)      0 (0%)           0 (0%)         5d22h
+  kube-system                 cilium-qskcg                         100m (5%)     0 (0%)      10Mi (0%)        0 (0%)         5d22h
+  kube-system                 kube-proxy-7g2tc                     0 (0%)        0 (0%)      0 (0%)           0 (0%)         43h
+  
+  wolfshop                    wolfshop-catalog-557dc6f7fc-7lvjr    100m (5%)     200m (10%)  128Mi (6%)       256Mi (13%)    5m1s
+
+
+
+
+
+------------------------------------------------------------------------------
+	limit ranges - default request / limits
+------------------------------------------------------------------------------
+
+"""
+
+apiVersion: v1
+kind: LimitRange
+metadata:
+  name: wolfshop-limit-range
+  namespace: wolfshop
+spec:
+  limits:
+  - default:
+      cpu: "100m"
+      memory: "128Mi"
+    defaultRequest:
+      cpu: "50m"
+      memory: "64Mi"
+    type: Container
+
+"""
+
+kubectl apply -f wolfshop-limit-range.yaml
+
+
+kubectl api-resources
+
+  NAME                                SHORTNAMES                          APIVERSION                          NAMESPACED   KIND
+  limitranges                         limits                              v1                                  true         LimitRange
+
+
+kubectl get limits
+
+  NAME                   CREATED AT
+  wolfshop-limit-range   2026-02-25T22:30:48Z
+
+
+
+base > kubectl describe limits wolfshop-limit-range
+
+  Name:       wolfshop-limit-range
+  Namespace:  wolfshop
+  Type        Resource  Min  Max  Default Request  Default Limit  Max Limit/Request Ratio
+  ----        --------  ---  ---  ---------------  -------------  -----------------------
+  Container   cpu       -    -    50m              100m           -
+  Container   memory    -    -    64Mi             128Mi          -
+
+
+
+
+
+
+
+
+
+
 
 ------------------------------------------------------------------------------
 	criar routes com ngf 
@@ -800,13 +894,6 @@ https://github.com/nginx/nginx-gateway-fabric/tree/main/examples/cafe-example
 
 
 	
-
-
-
-
-
-
-
 
 
 
