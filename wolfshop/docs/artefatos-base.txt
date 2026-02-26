@@ -868,6 +868,14 @@ base > kubectl describe limits wolfshop-limit-range
 
 
 
+------------------------------------------------------------------------------
+	resources quota
+------------------------------------------------------------------------------
+
+
+
+
+
 
 
 
@@ -876,13 +884,25 @@ base > kubectl describe limits wolfshop-limit-range
 
 
 ------------------------------------------------------------------------------
-	criar routes com ngf 
+	criar routes com nginx gateway fabric 
 ------------------------------------------------------------------------------
+
+
+
+Kubernetes Gateway API
+https://gateway-api.sigs.k8s.io/
+
+
+
+gwctl - command-line tool for managing and understanding Gateway API resources
+https://github.com/kubernetes-sigs/gwctl
+
 
 
 OFFICIAL DOCS
 ------------------------
 
+https://docs.nginx.com/nginx-gateway-fabric
 https://docs.nginx.com/nginx-gateway-fabric/traffic-management/
 https://docs.nginx.com/nginx-gateway-fabric/traffic-management/basic-routing/
 https://docs.nginx.com/nginx-gateway-fabric/traffic-security/
@@ -895,6 +915,284 @@ https://github.com/nginx/nginx-gateway-fabric/tree/main/examples/cafe-example
 
 	
 
+-------------- gateway class -------------------
+
+
+=> GatewayClass (Global): Define qual tecnologia será usada (NGINX).
+
+
+kubectl get gatewayclass -o wide
+
+  NAME    CONTROLLER                                   ACCEPTED   AGE     DESCRIPTION
+  nginx   gateway.nginx.org/nginx-gateway-controller   True       5d23h  
+
+
+
+kubectl describe gatewayclass nginx
+
+  ...
+
+
+
+
+
+-------------- gateway -------------------
+
+=> Gateway (Namespace): É o pedido real para abrir uma "porta" de entrada no cluster.
+
+Resumo da analogia:
+
+  - Objeto Gateway: É a "ordem de serviço".
+  - Pod: É o "porteiro/segurança" (NGINX) trabalhando.
+  - Service: É o "portão de entrada" (o IP/Porta) que leva até o porteiro.
+
+
+
+vim olfshop-gateway.yaml
+
+"""
+
+apiVersion: gateway.networking.k8s.io/v1
+kind: Gateway
+metadata:
+  name: wolfshop-gateway
+  namespace: wolfshop
+spec:
+  gatewayClassName: nginx
+  listeners:
+  - name: http
+    port: 80
+    protocol: HTTP
+    hostname: "*.wolfshop.com"
+
+"""
+
+
+kubectl apply -f wolfshop-gateway.yaml 
+
+  gateway.gateway.networking.k8s.io/wolfshop-gateway created
+
+
+
+
+kubectl get gateway -o wide -n wolfshop
+
+  NAME               CLASS   ADDRESS   PROGRAMMED   AGE
+  wolfshop-gateway   nginx             True         43s
+
+
+
+
+kubectl get deploy -o wide -n wolfshop
+
+  NAME                     READY   UP-TO-DATE   AVAILABLE   AGE     CONTAINERS                   IMAGES                                           SELECTOR
+  wolfshop-catalog         1/1     1            1           29h     wolfshop-catalog-container   nginx:1.28.2-alpine                              app=wolfshop-catalog
+  wolfshop-gateway-nginx   1/1     1            1           4m53s   nginx                        ghcr.io/nginx/nginx-gateway-fabric/nginx:2.4.2   app.kubernetes.io/instance=ngf,app.kubernetes.io/managed-by=ngf-nginx,app.kubernetes.io/name=wolfshop-     gateway-nginx,gateway.networking.k8s.io/gateway-name=wolfshop-gateway
+
+
+
+kubectl describe deploy wolfshop-gateway-nginx
+
+  ...
+
+
+
+kubectl get pod -o wide -n wolfshop
+
+  NAME                                      READY   STATUS    RESTARTS   AGE     IP           NODE        NOMINATED NODE   READINESS GATES
+  wolfshop-catalog-557dc6f7fc-7lvjr         1/1     Running   0          3h49m   10.0.1.124   worker-01   <none>           <none>
+  wolfshop-gateway-nginx-67474f944c-57xlx   1/1     Running   0          6m58s   10.0.1.184   worker-01   <none>           <none>
+
+
+
+kubectl get pod wolfshop-gateway-nginx-67474f944c-57xlx -o yaml
+
+  ...
+
+
+kubectl logs wolfshop-gateway-nginx-67474f944c-57xlx
+
+  ...
+
+
+
+
+-------------- http route -------------------
+
+=> HTTPRoute (Namespace): Conecta-se ao Gateway para dizer para onde o tráfego deve ir (serviços das suas apps).
+
+
+vim wolfshop-httproute.yam
+
+"""
+
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: wolfshop-httproute
+  namespace: wolfshop
+spec:
+  parentRefs:
+  - name: wolfshop-gateway
+    sectionName: http
+  hostnames:
+  - "catalog.wolfshop.com"
+  rules:
+  - matches:
+    - path: 
+        type: PathPrefix
+        value: /catalog
+    backendRefs:
+    - name: wolfshop-catalog
+      port: 80
+
+"""
+
+
+kubectl apply -f wolfshop-httproute.yam 
+
+  httproute.gateway.networking.k8s.io/wolfshop-httproute created
+
+
+
+kubectl get httproute
+
+  NAME                 HOSTNAMES                  AGE
+  wolfshop-httproute   ["catalog.wolfshop.com"]   97s
+
+
+
+kubectl describe httproute wolfshop-httproute
+
+  ...
+
+
+
+
+
+-------------- testar as rotas -------------------
+
+
+Para acessar seu HTTPRoute a partir do host (laptop), você precisa criar um caminho 
+para o tráfego chegar até o Service do tipo LoadBalancer que o NGINX criou automaticamente.
+
+Siga estes 3 passos:
+
+
+1. Descobrir o IP do Gateway
+O NGINX Gateway Fabric criou um serviço no Kubernetes. Como você está no KVM/virt-manager, 
+ele provavelmente não terá um IP externo real (ficará como <pending>), a menos que você use 
+algo como o MetalLB.
+
+Rode o comando:
+
+kubectl get svc -n wolfshop
+
+  NAME                     TYPE           CLUSTER-IP       EXTERNAL-IP   PORT(S)        AGE
+  wolfshop-gateway-nginx   LoadBalancer   10.100.183.31    <pending>     80:31324/TCP   37m
+
+
+- Se houver um IP em EXTERNAL-IP: Esse é o seu alvo.
+- Se estiver <pending>: Você usará o CLUSTER-IP ou o IP de um dos seus Worker Nodes.
+
+
+
+2. Editar o /etc/hosts do seu Laptop
+O seu navegador precisa saber que catalog.wolfshop.com resolve para o seu cluster. 
+No seu laptop (fora das VMs), rode:
+
+sudo vim /etc/hosts
+
+Adicione a linha:
+Exemplo: <IP-DO-PASSO-1> catalog.wolfshop.com
+
+
+sudo vim /etc/hosts
+
+"""
+
+10.100.183.31     catalog.wolfshop.com
+10.100.183.31     contact.wolfshop.com
+
+"""
+
+
+
+3. Testar o Acesso
+Abra o terminal do seu laptop e tente um curl:
+
+curl -i http://catalog.wolfshop.com
+
+
+Ou use o navegador no endereço: http://catalog.wolfshop.com.
+
+
+??????? NAO FUNCIONADA!!!!!!! ?????
+
+FAZER:
+-----------
+
+
+kubectl port-forward svc/wolfshop-gateway-nginx -n wolfshop 8095:80
+
+  Forwarding from 127.0.0.1:8095 -> 80
+  Forwarding from [::1]:8095 -> 80
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+------------------------------------------------------------------------------
+	RBAC - Key Roles and Personas
+------------------------------------------------------------------------------
+
+
+	- Infrastructure provider: (role-infra) 
+	  responsible for the care and feeding of a set of infrastructure that permits multiple isolated clusters to serve multiple tenants.
+
+	- Cluster operator: (role-operator)
+	  responsible for managing clusters to ensure that they meet the needs of their several users.
+	  
+	- Application developer: (role-developer)
+	  responsible for creating and managing an application running in a cluster. 	  
+
+	
 
 
 
@@ -912,6 +1210,50 @@ https://github.com/nginx/nginx-gateway-fabric/tree/main/examples/cafe-example
 ----------------------------------------------------------------------------------------------------------
 	??? probes / resources / limits / afinity / segurança user/resources no pod / ???
 ----------------------------------------------------------------------------------------------------------
+
+
+spec:
+  containers:
+  - image: ghcr.io/nginx/nginx-gateway-fabric/nginx:2.4.2
+    imagePullPolicy: IfNotPresent
+    name: nginx
+    ports:
+    - containerPort: 80
+      name: port-80
+      protocol: TCP
+    - containerPort: 9113
+      name: metrics
+      protocol: TCP
+    readinessProbe:
+      failureThreshold: 3
+      httpGet:
+        path: /readyz
+        port: 8081
+        scheme: HTTP
+      initialDelaySeconds: 3
+      periodSeconds: 10
+      successThreshold: 1
+      timeoutSeconds: 1
+    resources: {}
+    securityContext:
+      allowPrivilegeEscalation: false
+      capabilities:
+        drop:
+        - ALL
+      readOnlyRootFilesystem: true
+      runAsGroup: 1001
+      runAsUser: 101
+      seccompProfile:
+        type: RuntimeDefault
+
+
+
+
+
+
+
+
+
 
 
 
