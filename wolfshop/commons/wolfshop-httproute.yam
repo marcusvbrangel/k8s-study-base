@@ -6,7 +6,7 @@ metadata:
 spec:
   parentRefs:
   - name: wolfshop-gateway
-    sectionName: http
+    sectionName: https
   hostnames:
   - "*.wolfshop.com"
   rules:

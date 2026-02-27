@@ -1,0 +1,770 @@
+
+Tutorial: Add TLS to Nginx Gateway Fabric
+https://thenewstack.io/tutorial-add-tls-to-nginx-gateway-fabric/
+
+Gateway API - TLS Configuration
+https://gateway-api.sigs.k8s.io/guides/tls/
+
+NGINX Gateway Fabric - HTTPS termination
+https://docs.nginx.com/nginx-gateway-fabric/traffic-management/https-termination/
+
+https://github.com/nginx/documentation/blob/main/content/ngf/traffic-management/https-termination.md
+
+https://github.com/nginx/nginx-gateway-fabric/tree/main/examples
+
+https://docs.nginx.com/nginx-gateway-fabric/traffic-management/
+
+https://docs.nginx.com/nginx-gateway-fabric/traffic-security/
+
+https://docs.nginx.com/nginx-gateway-fabric//monitoring/
+
+
+
+
+
+------------------------------------------------------------------------------------------------------------------------
+
+
+
+
+
+
+
+kubebernetes + certificates + openssl + nginx gateway fabric + gateway.yaml --> eu quero gerar -> configurar -> implementar certificado no meu gateway --->>> apiVersion: gateway.networking.k8s.io/v1 kind: Gateway metadata: name: wolfshop-gateway namespace: wolfshop spec: gatewayClassName: nginx listeners: - name: http port: 80 protocol: HTTP hostname: "*.wolfshop.com"
+Para implementar o certificado TLS no seu NGINX Gateway Fabric, siga estes três passos: gerar os arquivos, criar o Secret e atualizar o seu YAML.
+1. Gerar o Certificado (OpenSSL)
+Como você está usando um wildcard *.wolfshop.com, o comando OpenSSL deve incluir o Subject Alternative Name (SAN) para que os navegadores aceitem o certificado:
+bash
+openssl req -x509 -nodes -days 365 -newkey rsa:2048 \
+  -keyout wolfshop.key -out wolfshop.crt \
+  -subj "/CN=*://" \
+  -addext "subjectAltName = DNS:*.wolfshop.com"
+Use o código com cuidado.
+
+1.2.7, 1.5.1
+2. Configurar o Secret no Kubernetes
+O Secret deve estar no mesmo namespace do seu Gateway (wolfshop):
+bash
+kubectl create secret tls wolfshop-wildcard-cert \
+  --cert=wolfshop.crt \
+  --key=wolfshop.key \
+  -n wolfshop
+Use o código com cuidado.
+
+1.3.1, 1.5.3
+3. Implementar no Gateway.yaml
+Agora, atualize seu listener para a porta 443 (HTTPS) e adicione o bloco tls referenciando o Secret. Você também pode manter a porta 80 para redirecionamento:
+yaml
+apiVersion: gateway.networking.k8s.io/v1
+kind: Gateway
+metadata:
+  name: wolfshop-gateway
+  namespace: wolfshop
+spec:
+  gatewayClassName: nginx
+  listeners:
+  - name: https
+    port: 443
+    protocol: HTTPS
+    hostname: "*.wolfshop.com"
+    tls:
+      mode: Terminate
+      certificateRefs:
+      - name: wolfshop-wildcard-cert
+  - name: http
+    port: 80
+    protocol: HTTP
+    hostname: "*.wolfshop.com"
+Use o código com cuidado.
+
+1.4.2, 1.4.4
+Dicas de Ouro:
+Namespace: O NGINX Gateway Fabric exige que o Secret esteja no mesmo namespace do recurso Gateway 1.3.1.
+Redirecionamento: Para forçar HTTPS, você precisará criar um HTTPRoute que capture o listener http e aplique um filtro de RequestRedirect 1.3.1.
+Automação: Para produção, considere usar o cert-manager para renovar seus certificados automaticamente via Let's Encrypt 1.2.1.
+A IA pode cometer erros. Por isso, cheque as respostas
+
+
+
+
+
+
+
+12 sites
+A Step-by-Step Guide to Generating Kubernetes TLS Secrets
+9 de nov. de 2023 — Get Reetesh Kumar's stories in your inbox. Join Medium for free to get updates from this writer. You should now have two files: .k...
+
+Medium
+
+Gere manualmente uma solicitação de assinatura de certificado ...
+2 de mar. de 2022 — Como gerar manualmente uma solicitação de assinatura de certificado (ou CSR) em um ambiente de hospedagem na web Apache ou Nginx u...
+
+SSL.com
+
+How to: Install Kong Gateway on-prem with Helm | Kong Docs
+Generate a TLS certificate using OpenSSL.
+
+Kong Docs
+Mostrar tudo
+isto sera para o meu laboratorio de estudos.... em meu laptop/host...... que tem um cluster kubernetes em cima de: kvm + virt-manager + 1 vm control plane + 3 vms worker nodes + com linux ubuntu 24 nas 4 vms
+Para o seu laboratório local com KVM/Ubuntu, o segredo é garantir que seu laptop resolva o domínio para o IP do cluster. Aqui está o ajuste fino para o seu ambiente:
+1. Gerar os arquivos (Sem frescura)
+No seu terminal:
+bash
+openssl req -x509 -nodes -days 365 -newkey rsa:2048 \
+  -keyout wolfshop.key -out wolfshop.crt \
+  -subj "/CN=*.wolfshop.com"
+Use o código com cuidado.
+
+2. Criar o Secret no Cluster
+bash
+kubectl create secret tls wolfshop-wildcard-cert \
+  --cert=wolfshop.crt \
+  --key=wolfshop.key \
+  -n wolfshop
+Use o código com cuidado.
+
+3. Gateway.yaml (Configuração HTTPS)
+yaml
+apiVersion: gateway.networking.k8s.io/v1
+kind: Gateway
+metadata:
+  name: wolfshop-gateway
+  namespace: wolfshop
+spec:
+  gatewayClassName: nginx
+  listeners:
+  - name: https
+    port: 443
+    protocol: HTTPS
+    hostname: "*.wolfshop.com"
+    tls:
+      mode: Terminate
+      certificateRefs:
+      - group: ""
+        kind: Secret
+        name: wolfshop-wildcard-cert
+Use o código com cuidado.
+
+Documentação Oficial NGINX Gateway Fabric - TLS Termination
+4. Pulo do Gato para Lab Local (KVM)
+Como você está em VMs KVM, o nginx-gateway-fabric provavelmente criou um Service do tipo LoadBalancer ou NodePort.
+Descubra o IP:
+kubectl get svc -n nginx-gateway
+No seu Laptop (Host):
+Edite o /etc/hosts do seu Ubuntu para apontar os nomes para o IP de uma das suas VMs worker (ou para o IP do LoadBalancer se estiver usando MetalLB):
+text
+# Exemplo no seu /etc/hosts
+192.168.122.100  api.wolfshop.com shop.wolfshop.com
+Use o código com cuidado.
+
+Acesse via Browser:
+Como o certificado é self-signed, o Chrome/Firefox vai reclamar. Clique em "Avançado" e "Prosseguir".
+Dica para o Lab: Se quiser automação real no seu KVM, instale o MetalLB para dar IPs "reais" da sua rede virtual aos Services do Kubernetes.
+
+
+
+eu já tenho o metallb funcionando
+Excelente que o MetalLB já esteja rodando! Isso facilita muito, pois o seu Gateway receberá um IP externo real da sua rede local (KVM).
+Aqui está o roteiro técnico exato para o seu cenário de laboratório:
+1. Gerar o Certificado Wildcard (OpenSSL)
+Execute este comando no seu terminal para gerar um certificado autoassinado que cubra todos os subdomínios:
+bash
+openssl req -x509 -nodes -days 365 -newkey rsa:2048 \
+  -keyout wolfshop.key -out wolfshop.crt \
+  -subj "/CN=*.wolfshop.com" \
+  -addext "subjectAltName = DNS:*.wolfshop.com, DNS:wolfshop.com"
+```(https://kubernetes.github.io)
+
+### 2. Criar o Secret no Kubernetes
+O NGINX Gateway Fabric exige que o Secret esteja no **mesmo namespace** do recurso `Gateway`:
+
+```bash
+kubectl create secret tls wolfshop-wildcard-cert \
+  --cert=wolfshop.crt \
+  --key=wolfshop.key \
+  -n wolfshop
+```(https://thenewstack.io/tutorial-add-tls-to-nginx-gateway-fabric/),(https://kubernetes.io)
+
+### 3. Implementar o Gateway.yaml
+Atualize seu arquivo para incluir o listener HTTPS. O MetalLB cuidará de atribuir o IP automaticamente ao serviço criado pelo Gateway Fabric.
+
+```yaml
+apiVersion: gateway.networking.k8s.io/v1
+kind: Gateway
+metadata:
+  name: wolfshop-gateway
+  namespace: wolfshop
+spec:
+  gatewayClassName: nginx
+  listeners:
+  - name: https
+    port: 443
+    protocol: HTTPS
+    hostname: "*.wolfshop.com"
+    tls:
+      mode: Terminate
+      certificateRefs:
+      - name: wolfshop-wildcard-cert
+  - name: http
+    port: 80
+    protocol: HTTP
+    hostname: "*.wolfshop.com"
+```(https://docs.nginx.com/nginx-gateway-fabric/traffic-management/tls-passthrough/),(https://gateway-api.sigs.k8s.io/guides/tls/)
+
+### 4. Conectar as pontas no seu Lab
+Como você está em um ambiente KVM/Virt-Manager, siga estes passos para testar:
+
+1.  **Pegue o IP do MetalLB:**
+    ```bash
+    kubectl get gateway wolfshop-gateway -n wolfshop
+    # Ou verifique o Service criado pelo controller:
+    kubectl get svc -n nginx-gateway
+    ```(https://metallb.universe.tf/usage/)
+2.  **Mapeie o Host no seu Laptop (Host Ubuntu):**
+    Edite seu `/etc/hosts` no laptop para que ele saiba quem é o `wolfshop.com`:
+    ```text
+    # Substitua pelo IP que o MetalLB entregou
+    192.168.122.XXX  shop.wolfshop.com api.wolfshop.com
+    ```
+3.  **Acesse no Browser:**
+    Ao acessar `https://shop.wolfshop.com`, o navegador dará um aviso de "Conexão não privada" porque o certificado é autoassinado. Clique em **Avançado > Prosseguir**.
+
+### Dica para o HTTPRoute
+Lembre-se que o Gateway apenas "abre a porta". Para o tráfego chegar no seu app, você precisa de um `HTTPRoute` vinculado ao listener `https`:
+
+```yaml
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: shop-route
+  namespace: wolfshop
+spec:
+  parentRefs:
+  - name: wolfshop-gateway
+    sectionName: https
+  rules:
+  - backendRefs:
+    - name: seu-servico-app
+      port: 80
+```(https://thenewstack.io/tutorial-add-tls-to-nginx-gateway-fabric/)
+Use o código com cuidado.
+
+
+
+
+no momento eu só tenho 2 subdominios:   catalog.wolfshop.com e contact.wolfshop.com     .... más no proximos meses eu terei quase 10 subdoninios.....      eu tenho que especifica-los todos agora????   ou posso deixar assim?  -subj "/CN=*.wolfshop.com" \
+  -addext "subjectAltName = DNS:*.wolfshop.com, DNS:wolfshop.com"
+Pode deixar exatamente assim: *.wolfshop.com é o que chamamos de certificado Wildcard.
+A beleza do Wildcard é justamente essa: ele funciona como um "coringa". Ao emitir um certificado para *.wolfshop.com, você está validando qualquer subdomínio de primeiro nível que venha a existir no futuro, sem precisar gerar um novo certificado ou reiniciar o Gateway a cada novo serviço.
+Como isso funciona na prática:
+Hoje: Ele vai cobrir perfeitamente catalog.wolfshop.com e contact.wolfshop.com.
+Amanhã: Se você criar checkout.wolfshop.com, api.wolfshop.com ou admin.wolfshop.com, o certificado que você gerou hoje já será válido para eles automaticamente.
+Única observação importante:
+O Wildcard padrão (*.domain.com) cobre apenas um nível.
+✅ Funciona para: qualquer-coisa.wolfshop.com
+❌ Não funciona para: muito.especifico.wolfshop.com (dois níveis de subdomínio).
+No seu Gateway.yaml:
+Mantenha o hostname: "*.wolfshop.com" no listener. O NGINX Gateway Fabric usará o SNI (Server Name Indication) para casar o certificado com qualquer subdomínio que você aponte para ele via HTTPRoute.
+Pode seguir com o plano original, você está economizando um trabalhão futuro! Referência sobre Certificados Wildcard.
+
+
+
+onde isto foi criado fisicamente?  openssl req -x509 -nodes -days 365 -newkey rsa:2048 \
+  -keyout wolfshop.key -out wolfshop.crt \
+  -subj "/CN=*.wolfshop.com" \
+  -addext "subjectAltName = DNS:*.wolfshop.com, DNS:wolfshop.com"     ... quais os principais comandos openssl que eu posso usar para gerenciar, visualizar este certificado?
+Fisicamente, esses arquivos foram criados no diretório atual onde você executou o comando no terminal (faça um ls -l e você verá o wolfshop.key e o wolfshop.crt lá).
+Aqui estão os comandos essenciais do OpenSSL para você gerenciar seu laboratório:
+1. Visualizar o conteúdo do Certificado
+Para conferir se o Wildcard e o SAN (Subject Alternative Name) ficaram certos:
+bash
+openssl x509 -in wolfshop.crt -text -noout
+Use o código com cuidado.
+
+Procure pela seção "Subject Alternative Name" na saída.
+2. Verificar se a Chave e o Certificado "combinam"
+No Kubernetes, se a chave privada não bater com o certificado, o Pod do Gateway vai dar erro. Use esse comando para ver se os modulus são idênticos:
+bash
+openssl x509 -noout -modulus -in wolfshop.crt | openssl md5
+openssl rsa -noout -modulus -in wolfshop.key | openssl md5
+Use o código com cuidado.
+
+Se o hash (código) for igual nos dois, o par está correto.
+3. Verificar a validade (data de expiração)
+Útil para saber quando seu lab vai "parar" de funcionar por certificado expirado:
+bash
+openssl x509 -in wolfshop.crt -enddate -noout
+Use o código com cuidado.
+
+4. Validar o certificado em um site rodando
+Depois que você configurar tudo no NGINX Gateway Fabric, você pode testar "por fora" (do seu laptop para a VM) se o Gateway está entregando o certificado certo:
+bash
+openssl s_client -connect catalog.wolfshop.com:443 -servername catalog.wolfshop.com
+Use o código com cuidado.
+
+5. Converter formatos (Caso precise futuramente)
+Se precisar transformar o par .crt/.key em um arquivo .pfx (comum em Windows/IIS):
+bash
+openssl pkcs12 -export -out wolfshop.pfx -inkey wolfshop.key -in wolfshop.crt
+Use o código com cuidado.
+
+Dica de Segurança: No seu lab, o arquivo .key é a sua chave privada. Se alguém tiver acesso a ela, pode descriptografar seu tráfego. O Kubernetes guarda isso de forma "protegida" dentro do Secret TLS.
+
+
+
+o que esta errado nisto: ase > kubectl create secret tls wolfshop-wildcard-cert \
+  --cert=wolfshop.crt \
+  --key=wolfshop.key \
+  -n wolfshop \
+> dry-run=client -o yaml
+error: exactly one NAME is required, got 2
+See 'kubectl create secret tls -h' for help and examples
+O erro ocorreu porque faltam os hifens (--) antes do dry-run. Sem os hifens, o Kubernetes entende que dry-run=client é o nome de um segundo recurso, e o comando só aceita um nome por vez.
+Além disso, para gerar o YAML na tela sem criar o recurso de fato, você precisa do comando completo assim:
+O comando corrigido:
+bash
+kubectl create secret tls wolfshop-wildcard-cert \
+  --cert=wolfshop.crt \
+  --key=wolfshop.key \
+  -n wolfshop \
+  --dry-run=client -o yaml
+Use o código com cuidado.
+
+Por que o erro aconteceu?
+dry-run=client vs --dry-run=client: Sem os dois traços iniciais, o kubectl interpreta isso como um argumento posicional (um nome).
+Limite de Nomes: O comando kubectl create espera apenas um nome (que no seu caso é wolfshop-wildcard-cert). Ao ler dry-run=client como um nome, ele "contou" dois nomes e travou.
+O que o -o yaml faz nesse caso?
+Como você usou o --dry-run=client, o Kubernetes não vai salvar o secret no banco de dados do cluster. Ele vai apenas:
+Ler os arquivos wolfshop.crt e wolfshop.key.
+Converter o conteúdo para base64 (formato exigido pelo Kubernetes).
+Imprimir o YAML pronto no seu terminal.
+Dica: Se você quiser salvar esse resultado em um arquivo para subir depois, use:
+... --dry-run=client -o yaml > secret-cert.yaml
+Gostaria que eu analisasse o conteúdo do YAML gerado para garantir que os campos tls.crt e tls.key estão corretos?
+
+
+
+estou procurando mas nao acho: Experimente: sudo apt install <deb name>
+base > kubectl get cert
+No resources found in wolfshop namespace.
+base > kubectl get certificate
+No resources found in wolfshop namespace.
+Isso acontece porque existe uma confusão comum entre Secrets e Certificates:
+O que você criou: Um Secret do tipo tls. O Kubernetes armazena os certificados gerados manualmente (OpenSSL) dentro de um objeto chamado Secret.
+O que você buscou: O comando kubectl get certificate só funciona se você tiver o cert-manager instalado. Ele é um Custom Resource (CRD) que automatiza a criação, enquanto você está fazendo o processo manual.
+Como visualizar o que você criou:
+Para ver o "certificado" que você acabou de subir como Secret, use:
+bash
+kubectl get secret -n wolfshop
+Use o código com cuidado.
+
+Referência: Kubernetes TLS Secrets
+Para ver os detalhes (em base64):
+bash
+kubectl get secret wolfshop-wildcard-cert -n wolfshop -o yaml
+Use o código com cuidado.
+
+Por que o apt install não ajudou?
+Não há um pacote .deb para isso porque certificate não é um comando do sistema, mas uma extensão da API do Kubernetes que só aparece após instalar o cert-manager.
+Resumo: No seu laboratório, como você está usando OpenSSL manual, esqueça o comando get certificate. O seu Gateway vai procurar por um Secret.
+Se o seu Gateway.yaml estiver assim, ele vai funcionar perfeitamente:
+yaml
+    tls:
+      mode: Terminate
+      certificateRefs:
+      - name: wolfshop-wildcard-cert # Nome do SECRET que você criou
+Use o código com cuidado.
+
+
+
+
+eu posso ter isto: cert-manager    ... e ainda sim criar os meus de forma manual?
+Sim, você pode ter os dois mundos convivendo pacificamente no mesmo cluster. O cert-manager e os Secrets manuais não se atropelam. Documentação do cert-manager sobre compatibilidade.
+Aqui está como eles interagem:
+1. Convivência no Cluster
+O cert-manager é apenas um "gerente automático". Ele cria e renova Secrets para você. Se você criar um Secret manualmente com o OpenSSL, o cert-manager simplesmente o ignorará, a menos que você adicione anotações específicas nele.
+2. No seu Gateway (NGINX Gateway Fabric)
+O recurso Gateway não sabe (e não se importa) quem gerou o certificado. Ele apenas aponta para um Secret.
+Manual: Você aponta para o Secret wolfshop-wildcard-cert que criou via CLI.
+Automático: Você apontaria para um Secret gerado pelo cert-manager.
+Por que instalar o cert-manager mesmo usando manual?
+Mesmo que você prefira criar o wildcard manualmente agora para aprender, ter o cert-manager instalado no seu laboratório é útil para:
+CA Local: Você pode configurar o cert-manager para ser sua própria Autoridade Certificadora interna (Self-signed Issuer), evitando usar o OpenSSL na mão toda vez. Guia de Self-Signed Issuer.
+Prática de Mercado: No dia a dia de DevOps, raramente se usa OpenSSL manual; usa-se o cert-manager com Let's Encrypt ou Vault.
+Como diferenciar no kubectl:
+Para ver o que o cert-manager gerou: kubectl get certificate -n wolfshop
+Para ver o que você gerou (e também o que o cert-manager gerou): kubectl get secret -n wolfshop
+Resumo: Pode instalar sem medo. O comando kubectl get certificate passará a funcionar (mas retornará vazio até você criar um objeto do tipo Certificate), e seus Secrets manuais continuarão funcionando normalmente no seu Gateway. Instalação via Helm.
+
+
+
+como eu verifico se o cert-manager esta instalado? como eu uso o cert-manager para vericar o meu certificado criado?
+Para verificar e integrar seu certificado manual com o cert-manager, use os seguintes passos:
+1. Como verificar se o cert-manager está instalado
+O cert-manager roda em um namespace próprio (geralmente cert-manager). Verifique os pods:
+bash
+kubectl get pods -n cert-manager
+Use o código com cuidado.
+
+Se o comando retornar namespace not found ou nenhum pod, ele não está instalado. Você também pode checar se as CRDs (extensões de API) existem:
+bash
+kubectl get crd | grep cert-manager
+```(https://cert-manager.io)
+
+---
+
+### 2. Como usar o cert-manager para "ver" seu certificado manual
+Aqui está o detalhe técnico: o cert-manager **não enxerga automaticamente** certificados criados via OpenSSL puro, pois ele gerencia objetos do tipo `Certificate`, enquanto você criou um `Secret`.
+
+Para o cert-manager "assumir" ou validar o seu certificado, você tem duas opções:
+
+#### Opção A: Importar para o cert-manager (Recomendado para Lab)
+Você cria um arquivo YAML do tipo `Certificate` que aponta para o Secret que você já criou. O cert-manager passará a monitorar a validade dele:
+
+```yaml
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: wolfshop-wildcard-mgmt
+  namespace: wolfshop
+spec:
+  secretName: wolfshop-wildcard-cert # O nome do secret que você criou via OpenSSL
+  issuerRef:
+    name: selfsigned-issuer # Você precisaria criar um Issuer antes
+    kind: Issuer
+  commonName: "*.wolfshop.com"
+  dnsNames:
+  - "*.wolfshop.com"
+  - "wolfshop.com"
+```(https://cert-manager.io)
+
+#### Opção B: Apenas validar com ferramentas do cert-manager
+Se você só quer verificar se o seu Secret manual é válido aos olhos das ferramentas do ecossistema, você pode usar o plugin **cmctl** (cert-manager CLI):
+```bash
+# Instale o cmctl e rode:
+cmctl inspect secret wolfshop-wildcard-cert -n wolfshop
+Use o código com cuidado.
+
+Este comando decodifica o Secret e mostra datas, nomes DNS e se a chave bate com o certificado, de forma muito mais amigável que o OpenSSL.
+Resumo para seu Lab
+No seu estágio atual:
+Instale o cert-manager via Helm Chart ou Manifesto YAML.
+Não se preocupe em "converter" seu certificado manual agora. Deixe o Gateway usando seu Secret manual.
+Use o próximo passo para aprender a criar um Issuer (emissor) dentro do cluster para que o cert-manager gere o próximo certificado para você automaticamente, sem usar o comando openssl no terminal. Guia de Primeiros Passos do cert-manager.
+
+
+
+eu so quero listar/verificar o meu certificado criado, pelo cert-manager
+Se você criou o certificado manualmente via OpenSSL, o cert-manager não vai listá-lo com o comando kubectl get certificate.
+Para o cert-manager reconhecer e listar esse certificado, você teria que criar um recurso do tipo Certificate apontando para o seu Secret. Como você fez o processo manual, o cert-manager é "cego" para ele.
+Para verificar o seu certificado agora, você tem duas opções:
+1. A forma nativa (Sem cert-manager)
+Como você criou um Secret, você o visualiza assim:
+bash
+kubectl get secret wolfshop-wildcard-cert -n wolfshop
+Use o código com cuidado.
+
+Para ver os detalhes técnicos (validade, DNS, etc) de forma legível:
+bash
+kubectl get secret wolfshop-wildcard-cert -n wolfshop -o jsonpath='{.data.tls\.crt}' | base64 -d | openssl x509 -text -noout
+Use o código com cuidado.
+
+Referência: Kubernetes TLS Secrets
+2. A forma "amigável" (Usando a ferramenta do cert-manager)
+Se você instalou o cert-manager, ele vem com um utilitário de linha de comando chamado cmctl (ou você pode instalar via apt ou go). Ele consegue inspecionar Secrets manuais:
+bash
+cmctl inspect secret wolfshop-wildcard-cert -n wolfshop
+Use o código com cuidado.
+
+Este comando é o "pulo do gato": ele vai ler seu Secret manual e mostrar uma tabela organizada com:
+Aprovação: Se o certificado é válido.
+DNS Names: Se o *.wolfshop.com está lá.
+Events: Se há algo errado com a chave.
+Documentação da CLI cmctl
+Resumo: O comando kubectl get certificate só listará algo se você pedir para o cert-manager gerar um certificado para você. Certificados feitos no "braço" com OpenSSL moram apenas em kubectl get secrets.
+
+
+
+192.168.122.242	  catalog.wolfshop.com
+192.168.122.242   contact.wolfshop.com
+base > curl -k https://catalog.wolfshop.com
+<html>
+<head><title>404 Not Found</title></head>
+<body>
+<center><h1>404 Not Found</h1></center>
+<hr><center>nginx</center>
+</body>
+</html>
+base >
+O seu 404 Not Found com a assinatura nginx é uma excelente notícia! Significa que:
+O MetalLB roteou o tráfego corretamente para o IP ...242.
+O NGINX Gateway Fabric recebeu a requisição no listener HTTPS (porta 443).
+O Certificado TLS foi aceito (por isso o -k funcionou sem erro de handshake).
+O erro 404 ocorre porque o NGINX não sabe para qual Pod enviar esse tráfego. O Gateway apenas "abre a porta", agora você precisa de um HTTPRoute para "ligar os pontos".
+Crie o arquivo routes.yaml para o seu lab:
+yaml
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: wolfshop-catalog-route
+  namespace: wolfshop
+spec:
+  parentRefs:
+  - name: wolfshop-gateway # Nome do seu Gateway
+    sectionName: https     # Nome do listener que criamos no passo anterior
+  hostnames:
+  - "catalog.wolfshop.com"
+  rules:
+  - matches:
+    - path:
+        type: PathPrefix
+        value: /
+    backendRefs:
+    - name: catalog-service # O nome do seu SERVICE do app catalog
+      port: 80              # A porta do SERVICE
+Use o código com cuidado.
+
+Documentação NGINX Gateway Fabric - HTTP Routing
+Por que funcionou mas deu 404?
+Sem o HTTPRoute, o NGINX se comporta como um servidor web padrão sem sites configurados. Ele responde "Eu estou aqui (nginx), mas não tenho conteúdo para este hostname".
+Ao aplicar o HTTPRoute, o NGINX cria dinamicamente as regras de proxy_pass para o seu serviço no Kubernetes.
+Como testar se o certificado está mesmo lá:
+Rode este comando para ver os detalhes do certificado que o NGINX está entregando:
+bash
+curl -kv https://catalog.wolfshop.com 2>&1 | grep -i "server certificate" -A 3
+Use o código com cuidado.
+
+Referência: Debugging TLS with Curl
+Se aparecer subject: CN=*.wolfshop.com, seu laboratório está 100% operacional na camada de infraestrutura! Basta agora configurar as rotas para os seus serviços catalog e contact.
+
+
+
+base > cat wolfshop-httproute.yam
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: wolfshop-httproute
+  namespace: wolfshop
+spec:
+  parentRefs:
+  - name: wolfshop-gateway
+    sectionName: http
+  hostnames:
+  - "*.wolfshop.com"
+  rules:
+  - matches:
+    - path:
+        type: PathPrefix
+        value: /catalog
+    - path:
+        type: Exact
+        value: /
+    backendRefs:
+    - name: wolfshop-catalog
+      port: 80
+base >
+O seu HTTPRoute está bem estruturado, mas há dois detalhes que vão causar o 404 ou erro de conexão no seu cenário atual de laboratório:
+1. O parentRefs está apontando para o listener errado
+No seu Gateway.yaml, o certificado TLS está configurado no listener chamado https (porta 443). No seu HTTPRoute, você apontou para o sectionName: http (porta 80).
+Para o HTTPS funcionar, mude para:
+yaml
+  parentRefs:
+  - name: wolfshop-gateway
+    sectionName: https  # <--- Deve ser o nome do listener com TLS
+Use o código com cuidado.
+
+Referência: Gateway API ParentRefs
+2. Conflito de Regras (Matches)
+No Kubernetes Gateway API, quando você coloca dois path dentro do mesmo bloco de matches, o NGINX tenta fazer um AND (E), ou seja, ele procura uma requisição que seja /catalog E / ao mesmo tempo, o que é impossível.
+Para funcionar como um OR (OU), você deve separar em itens de lista diferentes:
+yaml
+  rules:
+  - matches:
+    - path:
+        type: PathPrefix
+        value: /catalog
+    - path:                   # Cada traço (-) cria uma nova condição independente
+        type: Exact
+        value: /
+    backendRefs:
+    - name: wolfshop-catalog
+      port: 80
+Use o código com cuidado.
+
+Documentação: HTTPRoute Matching
+Como ficaria o arquivo corrigido:
+yaml
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: wolfshop-httproute
+  namespace: wolfshop
+spec:
+  parentRefs:
+  - name: wolfshop-gateway
+    sectionName: https        # Ligando ao listener do Certificado
+  hostnames:
+  - "*.wolfshop.com"
+  rules:
+  - matches:
+    - path:
+        type: PathPrefix
+        value: /catalog
+    - path:
+        type: Exact
+        value: /
+    backendRefs:
+    - name: wolfshop-catalog
+      port: 80
+Use o código com cuidado.
+
+Dica de Lab: Após aplicar (kubectl apply -f ...), teste com:
+curl -k https://catalog.wolfshop.com
+Se o seu pod wolfshop-catalog estiver rodando e o service estiver correto, o 404 sumirá! Se quiser testar o redirecionamento de HTTP para HTTPS depois, precisará de uma regra extra no listener http.
+
+
+
+base > curl -k https://catalog.wolfshop.com
+<h1>Wolfshop - Catalog</h1><hr>
+<h2>wolfshop-catalog-74d764d9f8-jj9hj</h2>
+Sucesso total! 🚀
+Esse HTML que você recebeu (<h1>Wolfshop - Catalog</h1>) confirma que toda a sua "pilha" de infraestrutura de rede no laboratório está funcionando perfeitamente:
+Resolução de DNS Local: O seu laptop enviou a requisição para o IP correto do MetalLB.
+Handshake TLS: O NGINX Gateway Fabric usou o certificado wildcard (*.wolfshop.com) que você gerou com o OpenSSL para fechar a conexão segura (o -k ignorou o fato de ser autoassinado).
+Roteamento (Gateway API): O HTTPRoute identificou o hostname catalog.wolfshop.com e a regra de path /.
+Carga de Trabalho (Pod): O tráfego chegou no pod wolfshop-catalog-74d764d9f8-jj9hj.
+O que você pode testar agora para validar o "Wildcard":
+Como o seu certificado e o seu HTTPRoute usam *.wolfshop.com, tente o seguinte:
+Adicione outro nome ao seu /etc/hosts:
+192.168.122.242 test.wolfshop.com
+Rode o curl:
+curl -k https://test.wolfshop.com
+O que vai acontecer? Você vai receber o mesmo HTML do Catalog. Isso prova que o seu wildcard está "pegando" qualquer subdomínio e mandando para o backend que você definiu na regra.
+Próximo passo sugerido:
+Se você quiser que o contact.wolfshop.com aponte para um pod diferente, basta criar um novo HTTPRoute (ou adicionar uma nova regra no atual) especificando o hostname: "contact.wolfshop.com" e o backendRef para o serviço de contato. O certificado TLS continuará sendo o mesmo!
+Documentação: NGINX Gateway Fabric - Multi-app Routing
+
+
+
+o ngf atual fora do cluster, do browser/curl até o gateway/loadbancer?  é o que deram o nome de trafego norte/sul???      ... e para dentro do cluster, que deram o nome de trafego leste/oeste......    a segurança, trafego pode ser gerenciada pelo cilium ou por esta abordage a seguir:   Securing backend traffic using mutual TLS
+Learn how to encrypt HTTP traffic between NGINX Gateway Fabric and your backend pods using mutual TLS between Gateway and Backend applications.
+
+Overview
+In this guide, you configure the TLS connection from the Gateway to a secure application using BackendTLSPolicy together with the Gateway’s backend TLS settings. The examples show how to validate the backend’s certificate and present a client certificate, so that traffic between the Gateway and the application is protected with mutual TLS.
+
+The intended use case is when a service or backend owner manages their own HTTPS configuration and certificates, and NGINX Gateway Fabric needs to know how to connect securely to this backend over HTTPS while also proving its own identity with a client certificate. This ensures that all traffic between the Gateway and the application is secured.
+
+The following diagram shows how the mTLS handshake takes place between NGINX Gateway Fabric and the secure-app application:                  ......    hoje em dia, qual o padrao esta se formando para gerenciar o trafego interneto.........
+Exatamente! Você pescou os conceitos fundamentais de arquitetura moderna de redes em Kubernetes. Vamos organizar essas "peças" do que está se tornando o padrão de mercado:
+1. Tráfego Norte-Sul (North-South)
+É o tráfego que entra ou sai do cluster (da Internet/Laptop para o seu Gateway).
+O que você fez: Usou o NGINX Gateway Fabric (NGF) + MetalLB.
+Segurança: TLS Termination (o NGF descriptografa o tráfego e o envia para dentro).
+Status: Esse é o padrão absoluto. O Gateway API está substituindo o antigo Ingress para gerenciar esse ponto de entrada. Documentação Gateway API.
+2. Tráfego Leste-Oeste (East-West)
+É o tráfego dentro do cluster (de um Pod para outro, ou do Gateway para um Pod).
+O Desafio: Tradicionalmente, o tráfego dentro do cluster era "aberto" (HTTP puro).
+A Solução: mTLS (Mutual TLS), onde tanto o cliente quanto o servidor provam quem são.
+Qual o padrão que está se formando hoje?
+Existem duas abordagens principais disputando o mercado, e a escolha depende da complexidade do seu ambiente:
+Abordagem A: Service Mesh (Cilium / Istio / Linkerd) — O "Padrão Invisível"
+Esta é a tendência mais forte para o futuro, especialmente com o Cilium Service Mesh.
+Como funciona: A segurança (mTLS) é feita na camada de rede (L3/L4) ou via Sidecars.
+Vantagem: O desenvolvedor não faz nada. O Cilium criptografa o tráfego entre os nós automaticamente (Transparent Encryption).
+Uso: Ideal para quando você tem centenas de microserviços e não quer gerenciar certificados para cada um deles manualmente. Cilium Service Mesh.
+Abordagem B: Gateway API + BackendTLSPolicy — O "Padrão Granular"
+É a abordagem que você citou no texto sobre o NGINX Gateway Fabric.
+Como funciona: O Gateway API define uma política (BackendTLSPolicy) que diz ao NGF: "Ao falar com o pod X, use este certificado de cliente".
+Vantagem: Controle total e explícito. Você sabe exatamente como a conexão está sendo feita. Não precisa de uma "malha" complexa se você só tem poucos serviços sensíveis.
+Uso: Perfeito para conformidade (compliance) onde você precisa provar que o tráfego foi criptografado de ponta a ponta (End-to-End Encryption). NGF Backend TLS.
+Resumo do Cenário Ideal para seu Lab:
+Norte-Sul: Continue com o NGINX Gateway Fabric. Ele é leve e o sucessor oficial do NGINX Ingress.
+Leste-Oeste:
+Para aprender a fundo: Implemente o BackendTLSPolicy no seu NGF. Isso vai te dar uma base sólida de como mTLS funciona no "aperto de mão" entre Gateway e App.
+Para produção em larga escala: Use o Cilium. Ele resolve a segurança leste-oeste de forma quase mágica e ainda te dá observabilidade (Hubble) para ver o tráfego fluindo.
+Conclusão: O padrão atual é a convergência. O Gateway API (que você está usando) está se tornando a "linguagem única" para configurar tanto o NGF quanto o Cilium. Você está no caminho certo! Diferenças entre Gateway API e Service Mesh.
+
+
+
+quais os comandos do curl e outros.... que eu posso usar para verificar as informações da conexao/url...
+Para o seu laboratório, você precisa de comandos que revelem o que está acontecendo "debaixo do capô", especialmente agora que você está lidando com certificados e roteamento.
+Aqui estão os principais comandos para curl, openssl e kubectl:
+1. Comandos com curl (O Canivete Suíço)
+Ver Cabeçalhos e Handshake TLS (O mais usado):
+Mostra o processo de conexão, a versão do TLS usada e os detalhes do certificado que o Gateway enviou.
+bash
+curl -kv https://catalog.wolfshop.com
+Use o código com cuidado.
+
+Ver Apenas os Cabeçalhos (Headers):
+Útil para ver qual servidor respondeu (Server: nginx) e o código de status (200, 404, 503).
+bash
+curl -I https://catalog.wolfshop.com
+Use o código com cuidado.
+
+Extrair Detalhes do Certificado via Curl:
+Se o seu curl for recente, você pode extrair informações do certificado diretamente na saída.
+bash
+curl -vI https://catalog.wolfshop.com -w "\n%{certs}\n"
+Use o código com cuidado.
+
+Medir Latência da Conexão:
+Para saber quanto tempo leva o DNS, o Handshake TLS e o tempo total.
+bash
+curl -o /dev/null -s -w 'DNS: %{time_namelookup}s | TLS: %{time_appconnect}s | Total: %{time_total}s\n' https://catalog.wolfshop.com
+Use o código com cuidado.
+
+
+Unix & Linux Stack Exchange
+Unix & Linux Stack Exchange
+ +6
+2. Comandos com openssl (Diagnóstico de Certificado)
+Testar Conexão TLS Pura:
+Simula uma conexão de cliente e despeja toda a cadeia de certificados e cifras negociadas.
+bash
+openssl s_client -connect 192.168.122.242:443 -servername catalog.wolfshop.com
+Use o código com cuidado.
+
+Testar uma versão específica de TLS:
+Útil para garantir que seu Gateway não aceita protocolos antigos e inseguros.
+bash
+openssl s_client -connect catalog.wolfshop.com:443 -tls1_2
+openssl s_client -connect catalog.wolfshop.com:443 -tls1_3
+Use o código com cuidado.
+
+
+Stack Overflow
+Stack Overflow
+ +3
+3. Comandos com kubectl (Status do Gateway API)
+No mundo do Gateway API, o comando get comum não mostra tudo. Use estes para ver se o NGINX "aceitou" sua configuração:
+kgateway
+kgateway
+ +2
+Verificar se o Gateway está "Programmed":
+Se o status não for True, seu IP do MetalLB ou seus certificados podem estar com erro.
+bash
+kubectl get gateway -n wolfshop
+Use o código com cuidado.
+
+Investigar Erros de Configuração:
+O campo Events no final da saída dirá se o Secret do certificado não foi encontrado ou se o HTTPRoute tem erro de sintaxe.
+bash
+kubectl describe gateway wolfshop-gateway -n wolfshop
+kubectl describe httproute wolfshop-httproute -n wolfshop
+Use o código com cuidado.
+
+4. Comandos para mTLS (Futuro do seu Lab)
+Se você implementar o BackendTLSPolicy (Segurança Leste-Oeste), o curl precisará enviar seu certificado de cliente para ser aceito:
+Medium
+Medium
+ +1
+bash
+curl -kv --cert client.crt --key client.key https://catalog.wolfshop.com
+Use o código com cuidado.
+
+Dica: Sempre que o curl retornar um erro de "Certificate expired" ou "Self-signed certificate", use o -k (ou --insecure) apenas para debug inicial, mas procure entender o erro no openssl s_client para resolver na raiz.
+
+
+
