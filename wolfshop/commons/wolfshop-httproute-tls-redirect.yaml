@@ -1,0 +1,17 @@
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: wolfshop-httproute-tls-redirect
+  namespace: wolfshop
+spec:
+  parentRefs:
+  - name: wolfshop-gateway
+    sectionName: http
+  hostnames:
+  - "*.wolfshop.com"
+  rules:
+  - filters:
+    - type: RequestRedirect
+      requestRedirect:
+        scheme: https
+        port: 443
