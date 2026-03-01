@@ -7,7 +7,7 @@ metadata:
   namespace: wolfshop
 #--------------- deploy -------------------------------------------  
 spec:
-  replicas: 4
+  replicas: 2
   selector:
     matchLabels:
       app: wolfshop-catalog
@@ -32,6 +32,27 @@ spec:
             name: wolfshop-catalog-configmap
         - secretRef:
             name: wolfshop-catalog-secret
+
+        # Readiness Probe - checks if the container can start receiving traffic...
+        readinessProbe:
+          httpGet:
+            path: /
+            port: 80
+          initialDelaySeconds: 5  # wait 5s after starting to test...
+          periodSeconds: 5        # cheks every 5 seconds...
+          successThreshold: 1     # needs 1 success to become 'Ready'...
+          failureThreshold: 3     # if it fails 3 times, k8s restarts the container...
+
+        # Liveness Probe - checks if the container chashed and needs to restart...
+        livenessProbe:
+          httpGet: 
+            path: /
+            port: 80
+          initialDelaySeconds: 15 # gives more time for the process to fully start up...  
+          periodSeconds: 10       # cheks every 5 seconds...
+          timeoutSeconds: 1       # nginx should respond within 1 second...
+          failureThreshold: 3     # if it fails 3 times, k8s restarts the container...
+
         command: ["sh", "-c"]
         args: 
         - |
