@@ -26,6 +26,16 @@ spec:
       - name: wolfshop-wildcard-cert
         namespace: wolfshop
         kind: Secret
+  - name: https-promotion
+    port: 443
+    protocol: HTTPS
+    hostname: "promotion.wolfshop.com"
+    tls:
+      mode: Terminate
+      certificateRefs:
+      - name: wolfshop-wildcard-cert
+        namespace: wolfshop
+        kind: Secret
   - name: http
     port: 80
     protocol: HTTP

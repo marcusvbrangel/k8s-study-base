@@ -1,0 +1,17 @@
+apiVersion: v1
+kind: Service
+metadata:
+  labels:
+    app: wolfshop-promotion
+  name: wolfshop-promotion
+  namespace: wolfshop
+spec:
+  ports:
+  - port: 80
+    protocol: TCP
+    targetPort: 8080
+  selector:
+    app: wolfshop-promotion
+  type: ClusterIP
+status:
+  loadBalancer: {}
