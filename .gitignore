@@ -1,3 +1,7 @@
 /.idea/copilot.data.migration.ask2agent.xml
 /.idea/vcs.xml
 /wolfshop/commons/wolfshop-limit-range.yaml
+/target
+target
+target/
+

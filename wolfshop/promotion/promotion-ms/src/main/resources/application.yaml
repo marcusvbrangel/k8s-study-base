@@ -1,0 +1,19 @@
+spring:
+  application:
+    name: promotion
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics,prometheus
+  endpoint:
+    health:
+      probes:
+        enabled: true
+
+
+# Actuator (root): http://localhost:8080/actuator
+# Health check geral: http://localhost:8080/actuator/health
+# Liveness: http://localhost:8080/actuator/health/liveness
+# Readiness: http://localhost:8080/actuator/health/readiness
