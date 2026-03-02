@@ -1,0 +1,8 @@
+apiVersion: v1
+data:
+  DB_URL: postgres/contact
+  DB_USER: root
+kind: ConfigMap
+metadata:
+  name: wolfshop-contact-configmap
+  namespace: wolfshop

@@ -6,16 +6,26 @@ metadata:
 spec:
   gatewayClassName: nginx
   listeners:
-  - name: https
+  - name: https-catalog
     port: 443
     protocol: HTTPS
-    hostname: "*.wolfshop.com"
+    hostname: "catalog.wolfshop.com"
     tls:
       mode: Terminate
       certificateRefs:
       - name: wolfshop-wildcard-cert
         namespace: wolfshop
-        kind: Secret  
+        kind: Secret
+  - name: https-contact
+    port: 443
+    protocol: HTTPS
+    hostname: "contact.wolfshop.com"
+    tls:
+      mode: Terminate
+      certificateRefs:
+      - name: wolfshop-wildcard-cert
+        namespace: wolfshop
+        kind: Secret
   - name: http
     port: 80
     protocol: HTTP

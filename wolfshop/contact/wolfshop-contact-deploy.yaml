@@ -1,0 +1,74 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  labels:
+    app: wolfshop-contact
+  name: wolfshop-contact
+  namespace: wolfshop
+#--------------- deploy -------------------------------------------  
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: wolfshop-contact
+#---------------- pod ---------------------------------------------      
+  template:
+    metadata:
+      labels:
+        app: wolfshop-contact
+    spec:
+      containers:
+      - image: nginx:1.28.2-alpine
+        name: wolfshop-contact-container
+        resources:
+          requests:
+            memory: "128Mi"
+            cpu: "0.1"
+          limits:
+            memory: "256Mi"
+            cpu: "0.2"
+        envFrom:
+        - configMapRef:
+            name: wolfshop-contact-configmap
+        - secretRef:
+            name: wolfshop-contact-secret
+
+        # Readiness Probe - checks if the container can start receiving traffic...
+        readinessProbe:
+          httpGet:
+            path: /
+            port: 80
+          initialDelaySeconds: 5  # wait 5s after starting to test...
+          periodSeconds: 5        # cheks every 5 seconds...
+          successThreshold: 1     # needs 1 success to become 'Ready'...
+          failureThreshold: 3     # if it fails 3 times, k8s restarts the container...
+
+        # Liveness Probe - checks if the container chashed and needs to restart...
+        livenessProbe:
+          httpGet: 
+            path: /
+            port: 80
+          initialDelaySeconds: 15 # gives more time for the process to fully start up...  
+          periodSeconds: 10       # cheks every 5 seconds...
+          timeoutSeconds: 1       # nginx should respond within 1 second...
+          failureThreshold: 3     # if it fails 3 times, k8s restarts the container...
+
+        command: ["sh", "-c"]
+        args: 
+        - |
+            echo "<h1>Wolfshop - Contact</h1><hr>" > "/usr/share/nginx/html/index.html"
+            echo "<h2>$HOSTNAME</h2>" >> "/usr/share/nginx/html/index.html"
+            while true; do
+              echo "$(date +"%Y-%m-%d %H:%M:%S") wolfshop contact is running..."
+              sleep 10
+            done &
+            nginx -g "daemon off;"
+        volumeMounts:
+        - name: contact-volume
+          mountPath: /data
+        ports:
+        - containerPort: 80
+      volumes:
+      - name: contact-volume
+        persistentVolumeClaim:
+          claimName: wolfshop-nfs-pvc
