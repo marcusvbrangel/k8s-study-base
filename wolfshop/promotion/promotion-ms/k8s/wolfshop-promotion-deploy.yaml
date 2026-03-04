@@ -22,14 +22,14 @@ spec:
         runAsGroup: 2000
         fsGroup: 3000
       containers:
-      - image: marcusvbrangel/promotion:1.2.0
+      - image: marcusvbrangel/wolfshop-promotion:1.2.0-alpine
         name: wolfshop-promotion-container        
         resources:
           requests:
-            memory: "760Mi"
+            memory: "256Mi"
             cpu: "0.1"
           limits:
-            memory: "1000Mi"
+            memory: "356Mi"
             cpu: "0.2"
         envFrom:
         - configMapRef:
