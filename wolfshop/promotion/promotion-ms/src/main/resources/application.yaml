@@ -12,6 +12,7 @@ management:
       probes:
         enabled: true
 
+spring.main.lazy-initialization: true
 
 # Actuator (root): http://localhost:8080/actuator
 # Health check geral: http://localhost:8080/actuator/health
